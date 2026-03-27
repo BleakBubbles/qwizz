@@ -1,21 +1,23 @@
 #!/usr/bin/env node
 
-const command = process.argv[2];
+import { gate } from './commands/gate.js'
+
+const command = process.argv[2]
 
 switch (command) {
 	case 'install':
-		console.log('install not implemented yet');
-		break;
+		console.log('install not implemented yet')
+		break
 	case 'gate':
-		console.log('gate not implemented yet');
-		break;
+		await gate()
+		break
 	case 'uninstall':
-		console.log('uninstall not implemented yet');
-		break;
+		console.log('uninstall not implemented yet')
+		break
 	case 'doctor':
-		console.log('doctor not implemented yet');
-		break;
+		console.log('doctor not implemented yet')
+		break
 	default:
-		console.error('Usage: quiz-commit <install|gate|uninstall|doctor>');
-		process.exit(1);
+		console.error('Usage: qwizz <install|gate|uninstall|doctor>')
+		process.exit(1)
 }
