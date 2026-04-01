@@ -4,62 +4,19 @@ import open from 'open';
 import { hasStagedChanges, getStagedDiff } from '../git/diff.js';
 import { hasApproval, writeApproval } from '../git/approvals.js';
 import { startQuizServer } from '../server/index.js';
+import { generateQuizFromDiff } from '../quiz/generate.js';
 
-type QuizOption = {
-	key: string;
-	text: string;
-};
-
-type QuizQuestion = {
-	id: string;
-	prompt: string;
-	options: QuizOption[];
-	answer: string;
-};
-
-type QuizSession = {
+type PublicSession = {
 	diffHash: string;
-	diff: string;
-	questions: QuizQuestion[];
+	questions: ReturnType<typeof generateQuizFromDiff>['questionsPublic'];
 };
 
 function sha256(text: string): string {
 	return crypto.createHash('sha256').update(text).digest('hex');
 }
 
-function createSession(diffHash: string, diff: string): QuizSession {
-	return {
-		diffHash,
-		diff,
-		questions: [
-			{
-				id: 'q1',
-				prompt: 'What does this change do at a high level?',
-				options: [
-					{ key: 'a', text: 'Adds a new feature or capability' },
-					{ key: 'b', text: 'Fixes a bug in existing behavior' },
-					{ key: 'c', text: 'Refactors code without changing behavior' },
-					{ key: 'd', text: 'Updates dependencies or configuration' },
-				],
-				answer: 'a',
-			},
-			{
-				id: 'q2',
-				prompt: 'What is one possible risk introduced by this change?',
-				options: [
-					{ key: 'a', text: 'It could break existing tests' },
-					{ key: 'b', text: 'It introduces a potential performance regression' },
-					{ key: 'c', text: 'It changes a public API surface' },
-					{ key: 'd', text: 'It has no meaningful risk' },
-				],
-				answer: 'a',
-			},
-		],
-	};
-}
-
 function gradeAnswers(
-	questions: QuizQuestion[],
+	questions: ReturnType<typeof generateQuizFromDiff>['questionsPrivate'],
 	answers: Record<string, string>,
 ): {
 	passed: boolean;
@@ -70,9 +27,7 @@ function gradeAnswers(
 	for (const q of questions) {
 		if (answers[q.id] !== q.answer) {
 			const correct = q.options.find((o) => o.key === q.answer);
-			explanations[q.id] = correct
-				? `Correct answer: ${correct.text}`
-				: 'Incorrect.';
+			explanations[q.id] = correct ? `Correct answer: ${correct.text}` : 'Incorrect.';
 		}
 	}
 
@@ -94,15 +49,19 @@ export async function gate(): Promise<void> {
 		process.exit(0);
 	}
 
-	const session = createSession(diffHash, diff);
+	const generated = generateQuizFromDiff(diff);
+	const sessionPublic: PublicSession = {
+		diffHash,
+		questions: generated.questionsPublic,
+	};
 
 	let settled = false;
 
-  const didPass = await new Promise<boolean>(async (resolve) => {
-    const server = await startQuizServer({
-      session,
-      onSubmit: ({ diffHash, answers }) => {
-				const result = gradeAnswers(session.questions, answers);
+	const didPass = await new Promise<boolean>(async (resolve) => {
+		const server = await startQuizServer({
+			session: sessionPublic,
+			onSubmit: ({ diffHash, answers }) => {
+				const result = gradeAnswers(generated.questionsPrivate, answers);
 
 				if (result.passed) {
 					writeApproval(diffHash);

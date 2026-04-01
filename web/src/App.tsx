@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type FormEvent } from 'react'
 
 type Option = {
   key: string
@@ -13,13 +13,25 @@ type Question = {
 
 type Session = {
   diffHash: string
-  diff: string
   questions: Question[]
 }
 
 type SubmitResult = {
   passed: boolean
   explanations: Record<string, string>
+}
+
+function SiteLogo() {
+  return (
+    <img
+      className="site-logo"
+      src="/logo.svg"
+      alt=""
+      width={40}
+      height={40}
+      aria-hidden={true}
+    />
+  )
 }
 
 export default function App() {
@@ -42,30 +54,36 @@ export default function App() {
 
   if (!session) {
     return (
-      <div className="backdrop">
-        <div className="container">
-          <p className="loading">loading…</p>
+      <>
+        <SiteLogo />
+        <div className="backdrop">
+          <div className="container">
+            <p className="loading">loading…</p>
+          </div>
         </div>
-      </div>
+      </>
     )
   }
 
   if (passed) {
     return (
-      <div className="backdrop">
-        <div className="container">
-          <div className="header">
-            <h1>qwizz</h1>
-          </div>
-          <div className="result result-pass">
-            Passed — commit approved. You can close this tab.
+      <>
+        <SiteLogo />
+        <div className="backdrop">
+          <div className="container">
+            <div className="header">
+              <h1>qwizz</h1>
+            </div>
+            <div className="result result-pass">
+              Passed — commit approved. You can close this tab.
+            </div>
           </div>
         </div>
-      </div>
+      </>
     )
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setSubmitting(true)
     setErrors({})
@@ -87,54 +105,57 @@ export default function App() {
   }
 
   return (
-    <div className="backdrop">
-      <div className="container">
-        <div className="header">
-          <h1>qwizz</h1>
-        </div>
-
-        <form onSubmit={handleSubmit}>
-          {session.questions.map((q) => (
-            <div key={q.id} className="question">
-              <p className="question-prompt">{q.prompt}</p>
-              <div className="options">
-                {q.options.map((opt) => (
-                  <label
-                    key={opt.key}
-                    className={`option ${answers[q.id] === opt.key ? 'is-selected' : ''}`}
-                  >
-                    <input
-                      type="radio"
-                      name={q.id}
-                      value={opt.key}
-                      checked={answers[q.id] === opt.key}
-                      onChange={() =>
-                        setAnswers((prev) => ({ ...prev, [q.id]: opt.key }))
-                      }
-                    />
-                    <span className="option-text">{opt.text}</span>
-                  </label>
-                ))}
-              </div>
-              {errors[q.id] && (
-                <p className="question-error">{errors[q.id]}</p>
-              )}
-            </div>
-          ))}
-
-          <div className="actions">
-            <button type="submit" className="submit-btn" disabled={submitting}>
-              {submitting ? 'checking…' : 'submit'}
-            </button>
+    <>
+      <SiteLogo />
+      <div className="backdrop">
+        <div className="container">
+          <div className="header">
+            <h1>qwizz</h1>
           </div>
 
-          {Object.keys(errors).length > 0 && (
-            <div className="result result-fail">
-              Some answers need more detail. Try again.
+          <form onSubmit={handleSubmit}>
+            {session.questions.map((q) => (
+              <div key={q.id} className="question">
+                <p className="question-prompt">{q.prompt}</p>
+                <div className="options">
+                  {q.options.map((opt) => (
+                    <label
+                      key={opt.key}
+                      className={`option ${answers[q.id] === opt.key ? 'is-selected' : ''}`}
+                    >
+                      <input
+                        type="radio"
+                        name={q.id}
+                        value={opt.key}
+                        checked={answers[q.id] === opt.key}
+                        onChange={() =>
+                          setAnswers((prev) => ({ ...prev, [q.id]: opt.key }))
+                        }
+                      />
+                      <span className="option-text">{opt.text}</span>
+                    </label>
+                  ))}
+                </div>
+                {errors[q.id] && (
+                  <p className="question-error">{errors[q.id]}</p>
+                )}
+              </div>
+            ))}
+
+            <div className="actions">
+              <button type="submit" className="submit-btn" disabled={submitting}>
+                {submitting ? 'checking…' : 'submit'}
+              </button>
             </div>
-          )}
-        </form>
+
+            {Object.keys(errors).length > 0 && (
+              <div className="result result-fail">
+                Some answers need more detail. Try again.
+              </div>
+            )}
+          </form>
+        </div>
       </div>
-    </div>
+    </>
   )
 }

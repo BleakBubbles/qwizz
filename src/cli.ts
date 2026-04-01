@@ -1,23 +1,25 @@
 #!/usr/bin/env node
 
 import { gate } from './commands/gate.js'
+import { install, uninstall } from './commands/install.js'
+import { doctor } from './commands/doctor.js'
 
 const command = process.argv[2]
 
 switch (command) {
 	case 'install':
-		console.log('install not implemented yet')
+		install({ native: process.argv.includes('--native') })
 		break
 	case 'gate':
 		await gate()
 		break
 	case 'uninstall':
-		console.log('uninstall not implemented yet')
+		uninstall()
 		break
 	case 'doctor':
-		console.log('doctor not implemented yet')
+		doctor()
 		break
 	default:
-		console.error('Usage: qwizz <install|gate|uninstall|doctor>')
+		console.error('Usage: qwizz <install [--native]|gate|uninstall|doctor>')
 		process.exit(1)
 }
