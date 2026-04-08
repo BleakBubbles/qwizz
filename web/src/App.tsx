@@ -34,6 +34,69 @@ function SiteLogo() {
   )
 }
 
+function AppFrame({
+  children,
+  showHeader = true,
+}: {
+  children: React.ReactNode
+  showHeader?: boolean
+}) {
+  return (
+    <>
+      <SiteLogo />
+      <div className="backdrop">
+        <div className="container">
+          {showHeader && (
+            <div className="header">
+              <h1>qwizz</h1>
+            </div>
+          )}
+          {children}
+        </div>
+      </div>
+    </>
+  )
+}
+
+function QuestionCard({
+  question,
+  value,
+  error,
+  onChange,
+}: {
+  question: Question
+  value: string
+  error?: string
+  onChange: (newValue: string) => void
+}) {
+  return (
+    <div className="question">
+      <p className="question-prompt">{question.prompt}</p>
+      <div className="options">
+        {question.options.map((opt) => {
+          const isSelected = value === opt.key
+          return (
+            <label
+              key={opt.key}
+              className={`option ${isSelected ? 'is-selected' : ''}`}
+            >
+              <input
+                type="radio"
+                name={question.id}
+                value={opt.key}
+                checked={isSelected}
+                onChange={() => onChange(opt.key)}
+              />
+              <span className="option-text">{opt.text}</span>
+            </label>
+          )
+        })}
+      </div>
+      {error && <p className="question-error">{error}</p>}
+    </div>
+  )
+}
+
 export default function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [answers, setAnswers] = useState<Record<string, string>>({})
@@ -46,52 +109,21 @@ export default function App() {
       .then((r) => r.json())
       .then((data: Session) => {
         setSession(data)
-        const initial: Record<string, string> = {}
-        for (const q of data.questions) initial[q.id] = ''
-        setAnswers(initial)
+        setAnswers(Object.fromEntries(data.questions.map((q) => [q.id, ''])))
       })
   }, [])
 
-  if (!session) {
-    return (
-      <>
-        <SiteLogo />
-        <div className="backdrop">
-          <div className="container">
-            <p className="loading">loading…</p>
-          </div>
-        </div>
-      </>
-    )
-  }
-
-  if (passed) {
-    return (
-      <>
-        <SiteLogo />
-        <div className="backdrop">
-          <div className="container">
-            <div className="header">
-              <h1>qwizz</h1>
-            </div>
-            <div className="result result-pass">
-              Passed — commit approved. You can close this tab.
-            </div>
-          </div>
-        </div>
-      </>
-    )
-  }
-
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    if (!session) return
+
     setSubmitting(true)
     setErrors({})
 
     const res = await fetch('/submit', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ diffHash: session!.diffHash, answers }),
+      body: JSON.stringify({ diffHash: session.diffHash, answers }),
     })
 
     const result: SubmitResult = await res.json()
@@ -104,58 +136,51 @@ export default function App() {
     }
   }
 
-  return (
-    <>
-      <SiteLogo />
-      <div className="backdrop">
-        <div className="container">
-          <div className="header">
-            <h1>qwizz</h1>
-          </div>
+  if (!session) {
+    return (
+      <AppFrame showHeader={false}>
+        <p className="loading">loading…</p>
+      </AppFrame>
+    )
+  }
 
-          <form onSubmit={handleSubmit}>
-            {session.questions.map((q) => (
-              <div key={q.id} className="question">
-                <p className="question-prompt">{q.prompt}</p>
-                <div className="options">
-                  {q.options.map((opt) => (
-                    <label
-                      key={opt.key}
-                      className={`option ${answers[q.id] === opt.key ? 'is-selected' : ''}`}
-                    >
-                      <input
-                        type="radio"
-                        name={q.id}
-                        value={opt.key}
-                        checked={answers[q.id] === opt.key}
-                        onChange={() =>
-                          setAnswers((prev) => ({ ...prev, [q.id]: opt.key }))
-                        }
-                      />
-                      <span className="option-text">{opt.text}</span>
-                    </label>
-                  ))}
-                </div>
-                {errors[q.id] && (
-                  <p className="question-error">{errors[q.id]}</p>
-                )}
-              </div>
-            ))}
-
-            <div className="actions">
-              <button type="submit" className="submit-btn" disabled={submitting}>
-                {submitting ? 'checking…' : 'submit'}
-              </button>
-            </div>
-
-            {Object.keys(errors).length > 0 && (
-              <div className="result result-fail">
-                Some answers need more detail. Try again.
-              </div>
-            )}
-          </form>
+  if (passed) {
+    return (
+      <AppFrame>
+        <div className="result result-pass">
+          Passed — commit approved. You can close this tab.
         </div>
-      </div>
-    </>
+      </AppFrame>
+    )
+  }
+
+  return (
+    <AppFrame>
+      <form onSubmit={handleSubmit}>
+        {session.questions.map((q) => (
+          <QuestionCard
+            key={q.id}
+            question={q}
+            value={answers[q.id] ?? ''}
+            error={errors[q.id]}
+            onChange={(optKey) =>
+              setAnswers((prev) => ({ ...prev, [q.id]: optKey }))
+            }
+          />
+        ))}
+
+        <div className="actions">
+          <button type="submit" className="submit-btn" disabled={submitting}>
+            {submitting ? 'checking…' : 'submit'}
+          </button>
+        </div>
+
+        {Object.keys(errors).length > 0 && (
+          <div className="result result-fail">
+            Some answers need more detail. Try again.
+          </div>
+        )}
+      </form>
+    </AppFrame>
   )
 }
