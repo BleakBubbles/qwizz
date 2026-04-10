@@ -4,37 +4,11 @@ import open from 'open';
 import { hasStagedChanges, getStagedDiff } from '../git/diff.js';
 import { hasApproval, writeApproval } from '../git/approvals.js';
 import { startQuizServer } from '../server/index.js';
-import { generateQuizFromDiff } from '../quiz/generate.js';
-
-type PublicSession = {
-	diffHash: string;
-	questions: ReturnType<typeof generateQuizFromDiff>['questionsPublic'];
-};
+import { parseUnifiedDiffToParsedInput } from '../git/parsedDiff.js';
+import type { SessionPayload } from '../server/index.js';
 
 function sha256(text: string): string {
 	return crypto.createHash('sha256').update(text).digest('hex');
-}
-
-function gradeAnswers(
-	questions: ReturnType<typeof generateQuizFromDiff>['questionsPrivate'],
-	answers: Record<string, string>,
-): {
-	passed: boolean;
-	explanations: Record<string, string>;
-} {
-	const explanations: Record<string, string> = {};
-
-	for (const q of questions) {
-		if (answers[q.id] !== q.answer) {
-			const correct = q.options.find((o) => o.key === q.answer);
-			explanations[q.id] = correct ? `Correct answer: ${correct.text}` : 'Incorrect.';
-		}
-	}
-
-	return {
-		passed: Object.keys(explanations).length === 0,
-		explanations,
-	};
 }
 
 export async function gate(): Promise<void> {
@@ -49,30 +23,25 @@ export async function gate(): Promise<void> {
 		process.exit(0);
 	}
 
-	const generated = generateQuizFromDiff(diff);
-	const sessionPublic: PublicSession = {
+	const sessionPublic: SessionPayload = {
 		diffHash,
-		questions: generated.questionsPublic,
 	};
+	const parsedDiff = parseUnifiedDiffToParsedInput(diff);
+	const apiBaseUrl = process.env.QWIZZ_API_BASE_URL ?? 'https://qwizz-api.macks0554.workers.dev';
 
 	let settled = false;
 
 	const didPass = await new Promise<boolean>(async (resolve) => {
 		const server = await startQuizServer({
 			session: sessionPublic,
-			onSubmit: ({ diffHash, answers }) => {
-				const result = gradeAnswers(generated.questionsPrivate, answers);
-
-				if (result.passed) {
-					writeApproval(diffHash);
-				}
-
-				if (result.passed && !settled) {
+			parsedDiff,
+			apiBaseUrl,
+			onPass: (approvedDiffHash) => {
+				writeApproval(approvedDiffHash);
+				if (!settled) {
 					settled = true;
 					void server.close().then(() => resolve(true));
 				}
-
-				return result;
 			},
 		});
 

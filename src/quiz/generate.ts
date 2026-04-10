@@ -1,9 +1,21 @@
-const KEYS = ['a', 'b', 'c', 'd'] as const
-type Key = (typeof KEYS)[number]
+const OPTION_IDS = ['A', 'B', 'C', 'D'] as const
+type OptionId = (typeof OPTION_IDS)[number]
 
-export type QuizOption = { key: Key; text: string }
-export type PublicQuizQuestion = { id: string; prompt: string; options: QuizOption[] }
-export type PrivateQuizQuestion = PublicQuizQuestion & { answer: Key }
+export type QuizOption = {
+	id: OptionId
+	text: string
+}
+
+export type PublicQuizQuestion = {
+	id: string
+	question: string
+	options: QuizOption[]
+}
+
+export type PrivateQuizQuestion = PublicQuizQuestion & {
+	explanation: string
+	answerIndex: 0 | 1 | 2 | 3
+}
 
 export type GeneratedQuiz = {
 	questionsPublic: PublicQuizQuestion[]
@@ -37,12 +49,12 @@ function hasAny(diff: string, needles: string[]): boolean {
 	return needles.some((n) => diff.includes(n))
 }
 
-function ensureFour(options: { text: string }[], answerIndex: number): QuizOption[] {
-	const base = options.slice(0, 4).map((o, i) => ({ key: KEYS[i], text: o.text }))
+function ensureFour(options: { text: string }[]): QuizOption[] {
+	const base = options
+		.slice(0, 4)
+		.map((o, i) => ({ id: OPTION_IDS[i], text: o.text }))
 	// If caller provided fewer than 4 (shouldn't), pad with blanks that won't win.
-	while (base.length < 4) base.push({ key: KEYS[base.length], text: '—' })
-	// Make sure correct answer key aligns with answerIndex.
-	// (Callers always pass answerIndex within 0..3.)
+	while (base.length < 4) base.push({ id: OPTION_IDS[base.length], text: '—' })
 	return base
 }
 
@@ -55,7 +67,7 @@ export function generateQuizFromDiff(diff: string): GeneratedQuiz {
 	// Easy #1: When does qwizz run? (always true, low-friction)
 	q.push({
 		id: 'q1',
-		prompt: 'When does qwizz run the quiz (by default)?',
+		question: 'When does qwizz run the quiz (by default)?',
 		options: ensureFour(
 			[
 				{ text: 'During git commit (pre-commit hook)' },
@@ -63,16 +75,16 @@ export function generateQuizFromDiff(diff: string): GeneratedQuiz {
 				{ text: 'Only during `npm run build`' },
 				{ text: 'Only when you `git push`' },
 			],
-			0,
 		),
-		answer: 'a',
+		answerIndex: 0,
+		explanation: 'qwizz runs in the git pre-commit flow by default.',
 	})
 
 	// Easy #2: pick a literal fact from diff if possible.
 	if (routes.some((r) => r.endsWith('/session.json'))) {
 		q.push({
 			id: 'q2',
-			prompt: 'Which endpoint returns the quiz session to the browser UI?',
+			question: 'Which endpoint returns the quiz session to the browser UI?',
 			options: ensureFour(
 				[
 					{ text: 'GET /session.json' },
@@ -80,14 +92,14 @@ export function generateQuizFromDiff(diff: string): GeneratedQuiz {
 					{ text: 'GET /submit' },
 					{ text: 'POST /session' },
 				],
-				0,
 			),
-			answer: 'a',
+			answerIndex: 0,
+			explanation: 'The session payload is served through GET /session.json.',
 		})
 	} else if (hasAny(diff, ['.husky/pre-commit', '.git/hooks/pre-commit', 'pre-commit'])) {
 		q.push({
 			id: 'q2',
-			prompt: 'Where is qwizz typically installed so git runs it automatically?',
+			question: 'Where is qwizz typically installed so git runs it automatically?',
 			options: ensureFour(
 				[
 					{ text: '.husky/pre-commit (if using Husky) or .git/hooks/pre-commit (native)' },
@@ -95,15 +107,15 @@ export function generateQuizFromDiff(diff: string): GeneratedQuiz {
 					{ text: '.gitignore' },
 					{ text: 'package-lock.json' },
 				],
-				0,
 			),
-			answer: 'a',
+			answerIndex: 0,
+			explanation: 'Hooks run from Husky pre-commit or native git hook paths.',
 		})
 	} else {
 		const fileHint = files[0] ? ` (e.g. ${files[0]})` : ''
 		q.push({
 			id: 'q2',
-			prompt: `What kind of information does the staged diff contain?${fileHint}`,
+			question: `What kind of information does the staged diff contain?${fileHint}`,
 			options: ensureFour(
 				[
 					{ text: 'Code changes that will be included in the next commit' },
@@ -111,9 +123,9 @@ export function generateQuizFromDiff(diff: string): GeneratedQuiz {
 					{ text: 'Only commit messages' },
 					{ text: 'Only remote branch history' },
 				],
-				0,
 			),
-			answer: 'a',
+			answerIndex: 0,
+			explanation: 'The staged diff represents changes queued for commit.',
 		})
 	}
 
@@ -129,7 +141,7 @@ export function generateQuizFromDiff(diff: string): GeneratedQuiz {
 		{ text: 'It permanently deletes your staged changes' },
 		{ text: 'It rewrites git history during commit' },
 	]
-	let answer: Key = 'a'
+	let answerIndex: 0 | 1 | 2 | 3 = 0
 
 	if (mentionsSpawn && !mentionsServer) {
 		prompt = 'What is one plausible failure mode when installing/running qwizz via hooks?'
@@ -139,7 +151,7 @@ export function generateQuizFromDiff(diff: string): GeneratedQuiz {
 			{ text: 'The hook will upload your code to a remote server' },
 			{ text: 'Git will skip the commit message step entirely' },
 		]
-		answer = 'a'
+		answerIndex = 0
 	} else if (mentionsServer && mentionsBrowser) {
 		prompt = 'What is one plausible failure mode when starting the quiz UI?'
 		options = [
@@ -148,14 +160,15 @@ export function generateQuizFromDiff(diff: string): GeneratedQuiz {
 			{ text: 'It will change your global git config' },
 			{ text: 'It will sign commits with a new GPG key' },
 		]
-		answer = 'a'
+		answerIndex = 0
 	}
 
 	q.push({
 		id: 'q3',
-		prompt,
-		options: ensureFour(options, 0),
-		answer,
+		question: prompt,
+		options: ensureFour(options),
+		answerIndex,
+		explanation: 'This reflects a realistic operational risk from the hook flow.',
 	})
 
 	// Enforce exactly 3 questions.
@@ -163,7 +176,7 @@ export function generateQuizFromDiff(diff: string): GeneratedQuiz {
 
 	return {
 		questionsPrivate: trimmed,
-		questionsPublic: trimmed.map(({ answer: _a, ...rest }) => rest),
+		questionsPublic: trimmed.map(({ answerIndex: _a, explanation: _e, ...rest }) => rest),
 	}
 }
 

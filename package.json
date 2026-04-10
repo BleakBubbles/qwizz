@@ -26,6 +26,7 @@
 		"@hono/node-server": "^1.13.0",
 		"hono": "^4.0.0",
 		"open": "^10.0.0",
+		"qwizz-shared": "file:../qwizz-shared",
 		"react": "^19.0.0",
 		"react-dom": "^19.0.0"
 	},
