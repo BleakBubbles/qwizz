@@ -96,6 +96,12 @@ export async function startQuizServer(options: StartQuizServerOptions): Promise<
 		hostname: '127.0.0.1',
 		port: 0,
 	});
+	if ('keepAliveTimeout' in server) {
+		server.keepAliveTimeout = 500;
+	}
+	if ('headersTimeout' in server) {
+		server.headersTimeout = 1000;
+	}
 
 	await new Promise<void>((resolve) => {
 		server.on('listening', resolve);
