@@ -13,7 +13,6 @@ export type PublicQuizQuestion = {
 }
 
 export type PrivateQuizQuestion = PublicQuizQuestion & {
-	explanation: string
 	answerIndex: 0 | 1 | 2 | 3
 }
 
@@ -77,7 +76,6 @@ export function generateQuizFromDiff(diff: string): GeneratedQuiz {
 			],
 		),
 		answerIndex: 0,
-		explanation: 'qwizz runs in the git pre-commit flow by default.',
 	})
 
 	// Easy #2: pick a literal fact from diff if possible.
@@ -94,7 +92,6 @@ export function generateQuizFromDiff(diff: string): GeneratedQuiz {
 				],
 			),
 			answerIndex: 0,
-			explanation: 'The session payload is served through GET /session.json.',
 		})
 	} else if (hasAny(diff, ['.husky/pre-commit', '.git/hooks/pre-commit', 'pre-commit'])) {
 		q.push({
@@ -109,7 +106,6 @@ export function generateQuizFromDiff(diff: string): GeneratedQuiz {
 				],
 			),
 			answerIndex: 0,
-			explanation: 'Hooks run from Husky pre-commit or native git hook paths.',
 		})
 	} else {
 		const fileHint = files[0] ? ` (e.g. ${files[0]})` : ''
@@ -125,7 +121,6 @@ export function generateQuizFromDiff(diff: string): GeneratedQuiz {
 				],
 			),
 			answerIndex: 0,
-			explanation: 'The staged diff represents changes queued for commit.',
 		})
 	}
 
@@ -168,7 +163,6 @@ export function generateQuizFromDiff(diff: string): GeneratedQuiz {
 		question: prompt,
 		options: ensureFour(options),
 		answerIndex,
-		explanation: 'This reflects a realistic operational risk from the hook flow.',
 	})
 
 	// Enforce exactly 3 questions.
@@ -176,7 +170,7 @@ export function generateQuizFromDiff(diff: string): GeneratedQuiz {
 
 	return {
 		questionsPrivate: trimmed,
-		questionsPublic: trimmed.map(({ answerIndex: _a, explanation: _e, ...rest }) => rest),
+		questionsPublic: trimmed.map(({ answerIndex: _a, ...rest }) => rest),
 	}
 }
 

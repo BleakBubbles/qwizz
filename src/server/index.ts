@@ -5,7 +5,7 @@ import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import type { PublicQuizQuestion } from '../quiz/generate.js';
-import { QuizResponseSchema, type ParsedDiffInput } from 'qwizz-shared';
+import { QuizResponseSchema, type ParsedDiffInput, type QuizOptionId } from 'qwizz-shared';
 
 export type SubmitPayload = {
 	diffHash: string;
@@ -14,7 +14,7 @@ export type SubmitPayload = {
 
 export type SubmitResult = {
 	passed: boolean;
-	explanations: Record<string, string>;
+	errors: Record<string, string>;
 };
 
 export type SessionPayload = {
@@ -29,20 +29,12 @@ type StartQuizServerOptions = {
 };
 
 type PrivateQuizQuestion = PublicQuizQuestion & {
-	answerIndex: 0 | 1 | 2 | 3;
+	correctOptionId: QuizOptionId;
 };
 
 type GeneratedQuizState = {
 	publicQuestions: PublicQuizQuestion[];
 	privateQuestions: PrivateQuizQuestion[];
-};
-
-type ApiQuizQuestion = {
-	id: string;
-	question: string;
-	options: Array<{ id: 'A' | 'B' | 'C' | 'D'; text: string }>;
-	correctOptionIndex: 0 | 1 | 2 | 3;
-	explanation: string;
 };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -118,21 +110,19 @@ export async function startQuizServer(options: StartQuizServerOptions): Promise<
 }
 
 function gradeAnswers(questions: PrivateQuizQuestion[], answers: Record<string, string>): SubmitResult {
-	const explanations: Record<string, string> = {};
+	const errors: Record<string, string> = {};
 
 	for (const question of questions) {
 		const selectedOption = answers[question.id];
-		const correctOption = question.options[question.answerIndex];
-		if (!correctOption || selectedOption !== correctOption.id) {
-			explanations[question.id] = correctOption
-				? `Correct answer: ${correctOption.text}`
-				: 'Incorrect.';
+		const correctOption = question.options.find((option) => option.id === question.correctOptionId);
+		if (!correctOption || selectedOption !== question.correctOptionId) {
+			errors[question.id] = correctOption ? `Correct answer: ${correctOption.text}` : 'Incorrect.';
 		}
 	}
 
 	return {
-		passed: Object.keys(explanations).length === 0,
-		explanations,
+		passed: Object.keys(errors).length === 0,
+		errors,
 	};
 }
 
@@ -150,7 +140,7 @@ async function fetchAndNormalizeQuiz(apiBaseUrl: string, parsedDiff: ParsedDiffI
 	}
 
 	const rawPayload = await response.json();
-	const parsed = QuizResponseSchema.parse(rawPayload) as { questions: ApiQuizQuestion[] };
+	const parsed = QuizResponseSchema.parse(rawPayload);
 
 	const privateQuestions: PrivateQuizQuestion[] = parsed.questions.map((question) => {
 		const options = question.options.map((option) => ({
@@ -162,12 +152,12 @@ async function fetchAndNormalizeQuiz(apiBaseUrl: string, parsedDiff: ParsedDiffI
 			id: question.id,
 			question: question.question,
 			options,
-			answerIndex: question.correctOptionIndex as 0 | 1 | 2 | 3,
+			correctOptionId: question.correctOptionId,
 		};
 	});
 
 	const publicQuestions: PublicQuizQuestion[] = privateQuestions.map(
-		({ answerIndex: _answerIndex, ...publicQuestion }) => publicQuestion,
+		({ correctOptionId: _correctOptionId, ...publicQuestion }) => publicQuestion,
 	);
 
 	return { publicQuestions, privateQuestions };

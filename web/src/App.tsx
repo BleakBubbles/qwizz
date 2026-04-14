@@ -17,7 +17,7 @@ type QuizSession = {
 
 type SubmitResult = {
 	passed: boolean;
-	explanations: Record<string, string>;
+	errors: Record<string, string>;
 };
 
 function SiteLogo() {
@@ -118,7 +118,7 @@ export default function App() {
 		if (result.passed) {
 			setPassed(true);
 		} else {
-			setErrors(result.explanations);
+			setErrors(result.errors);
 		}
 
 		setSubmitting(false);

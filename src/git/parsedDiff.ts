@@ -5,6 +5,8 @@ const MAX_HUNKS_PER_FILE = 200;
 const MAX_LINES_PER_HUNK = 500;
 const MAX_HUNK_HEADER_LENGTH = 500;
 const MAX_LINE_CONTENT_LENGTH = 2000;
+const CONTEXT_LINES_BEFORE_CHANGE = 1;
+const CONTEXT_LINES_AFTER_CHANGE = 1;
 
 function truncate(text: string, maxLength: number): string {
 	if (text.length <= maxLength) return text;
@@ -91,6 +93,21 @@ function parseDiffStatus(lines: string[], startIndex: number): DiffFile['status'
 function parseHunks(fileLines: string[]): DiffHunk[] {
 	const hunks: DiffHunk[] = [];
 	let current: DiffHunk | null = null;
+	let pendingContextBefore: DiffHunk['lines'] = [];
+	let remainingContextAfterChange = 0;
+
+	function pushLine(line: DiffHunk['lines'][number]) {
+		if (!current) return;
+		if (current.lines.length >= MAX_LINES_PER_HUNK) return;
+		current.lines.push(line);
+	}
+
+	function queueContextBefore(line: DiffHunk['lines'][number]) {
+		if (pendingContextBefore.length >= CONTEXT_LINES_BEFORE_CHANGE) {
+			pendingContextBefore.shift();
+		}
+		pendingContextBefore.push(line);
+	}
 
 	for (const line of fileLines) {
 		const normalizedLine = line.replace(/\r$/, '');
@@ -99,6 +116,8 @@ function parseHunks(fileLines: string[]): DiffHunk[] {
 			if (hunks.length >= MAX_HUNKS_PER_FILE) break;
 			current = { header: truncate(normalizedLine, MAX_HUNK_HEADER_LENGTH), lines: [] };
 			hunks.push(current);
+			pendingContextBefore = [];
+			remainingContextAfterChange = 0;
 			continue;
 		}
 
@@ -109,12 +128,28 @@ function parseHunks(fileLines: string[]): DiffHunk[] {
 
 		const prefix = normalizedLine.charAt(0);
 		if (prefix === '+') {
-			current.lines.push({ type: 'add', content: normalizeLineContent(normalizedLine.slice(1)) });
+			for (const contextLine of pendingContextBefore) {
+				pushLine(contextLine);
+			}
+			pendingContextBefore = [];
+			pushLine({ type: 'add', content: normalizeLineContent(normalizedLine.slice(1)) });
+			remainingContextAfterChange = CONTEXT_LINES_AFTER_CHANGE;
 		} else if (prefix === '-') {
-			current.lines.push({ type: 'del', content: normalizeLineContent(normalizedLine.slice(1)) });
+			for (const contextLine of pendingContextBefore) {
+				pushLine(contextLine);
+			}
+			pendingContextBefore = [];
+			pushLine({ type: 'del', content: normalizeLineContent(normalizedLine.slice(1)) });
+			remainingContextAfterChange = CONTEXT_LINES_AFTER_CHANGE;
 		} else if (prefix === ' ' || normalizedLine === '') {
 			const content = prefix === ' ' ? normalizedLine.slice(1) : '';
-			current.lines.push({ type: 'context', content: normalizeLineContent(content) });
+			const contextLine = { type: 'context' as const, content: normalizeLineContent(content) };
+			if (remainingContextAfterChange > 0) {
+				pushLine(contextLine);
+				remainingContextAfterChange -= 1;
+			} else {
+				queueContextBefore(contextLine);
+			}
 		}
 	}
 
@@ -186,7 +221,7 @@ export function parseUnifiedDiffToParsedInput(diff: string): ParsedDiffInput {
 	const summarySuffix = truncatedFiles ? '\n[truncated files to first 100 entries]' : '';
 	const payload: ParsedDiffInput = {
 		diffId: 'staged-diff',
-		summary: (diff.slice(0, 7800) + summarySuffix) || 'No diff summary.',
+		summary: diff.slice(0, 7800) + summarySuffix || 'No diff summary.',
 		files,
 	};
 
