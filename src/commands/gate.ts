@@ -3,6 +3,7 @@ import open from 'open';
 
 import { hasStagedChanges, getStagedDiff } from '../git/diff.js';
 import { hasApproval, writeApproval } from '../git/approvals.js';
+import { getOrCreateClientId } from '../git/clientIdentity.js';
 import { startQuizServer } from '../server/index.js';
 import { parseUnifiedDiffToParsedInput } from '../git/parsedDiff.js';
 import type { SessionPayload } from '../server/index.js';
@@ -27,6 +28,7 @@ export async function gate(): Promise<void> {
 		diffHash,
 	};
 	const parsedDiff = parseUnifiedDiffToParsedInput(diff);
+	const clientId = getOrCreateClientId();
 	const apiBaseUrl = process.env.QWIZZ_API_BASE_URL ?? 'https://qwizz-api.macks0554.workers.dev';
 
 	let settled = false;
@@ -36,6 +38,7 @@ export async function gate(): Promise<void> {
 			session: sessionPublic,
 			parsedDiff,
 			apiBaseUrl,
+			clientId,
 			onPass: (approvedDiffHash) => {
 				writeApproval(approvedDiffHash);
 				if (!settled) {

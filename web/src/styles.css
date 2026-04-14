@@ -91,6 +91,13 @@ body,
 	color: var(--text);
 }
 
+code {
+	font-family: var(--mono);
+	background: #1a1a1a;
+	padding: 0 0.3em;
+	border-radius: 4px;
+}
+
 .options {
 	display: flex;
 	flex-direction: column;

@@ -20,6 +20,15 @@ type SubmitResult = {
 	errors: Record<string, string>;
 };
 
+function renderInlineCode(text: string): React.ReactNode[] {
+	return text.split(/(`[^`]+`)/g).map((part, i) => {
+		if (part.startsWith('`') && part.endsWith('`')) {
+			return <code key={i}>{part.slice(1, -1)}</code>;
+		}
+		return <span key={i}>{part}</span>;
+	});
+}
+
 function SiteLogo() {
 	return <img className="site-logo" src="/logo.svg" alt="" width={40} height={40} aria-hidden={true} />;
 }
@@ -55,7 +64,7 @@ function QuestionCard({
 }) {
 	return (
 		<div className="question">
-			<p className="question-prompt">{question.question}</p>
+			<p className="question-prompt">{renderInlineCode(question.question)}</p>
 			<div className="options">
 				{question.options.map((opt) => {
 					const optionId = opt.id ?? '';
@@ -69,7 +78,7 @@ function QuestionCard({
 								checked={isSelected}
 								onChange={() => onChange(optionId)}
 							/>
-							<span className="option-text">{opt.text}</span>
+							<span className="option-text">{renderInlineCode(opt.text)}</span>
 						</label>
 					);
 				})}

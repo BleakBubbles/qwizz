@@ -25,6 +25,7 @@ type StartQuizServerOptions = {
 	session: SessionPayload;
 	apiBaseUrl: string;
 	parsedDiff: ParsedDiffInput;
+	clientId: string;
 	onPass: (diffHash: string) => void;
 };
 
@@ -55,7 +56,11 @@ export async function startQuizServer(options: StartQuizServerOptions): Promise<
 
 	app.get('/quiz', async (c) => {
 		if (!generatingPromise) {
-			generatingPromise = fetchAndNormalizeQuiz(options.apiBaseUrl, options.parsedDiff);
+			generatingPromise = fetchAndNormalizeQuiz(
+				options.apiBaseUrl,
+				options.parsedDiff,
+				options.clientId,
+			);
 		}
 		const nextGenerated = await generatingPromise;
 		generated = nextGenerated;
@@ -70,7 +75,11 @@ export async function startQuizServer(options: StartQuizServerOptions): Promise<
 		}
 
 		if (!generated) {
-			generated = await fetchAndNormalizeQuiz(options.apiBaseUrl, options.parsedDiff);
+			generated = await fetchAndNormalizeQuiz(
+				options.apiBaseUrl,
+				options.parsedDiff,
+				options.clientId,
+			);
 		}
 
 		const result = gradeAnswers(generated.privateQuestions, body.answers);
@@ -126,11 +135,14 @@ function gradeAnswers(questions: PrivateQuizQuestion[], answers: Record<string, 
 	};
 }
 
-async function fetchAndNormalizeQuiz(apiBaseUrl: string, parsedDiff: ParsedDiffInput) {
+async function fetchAndNormalizeQuiz(apiBaseUrl: string, parsedDiff: ParsedDiffInput, clientId: string) {
 	const baseUrl = apiBaseUrl.replace(/\/+$/, '');
 	const response = await fetch(`${baseUrl}/quiz/from-diff`, {
 		method: 'POST',
-		headers: { 'content-type': 'application/json' },
+		headers: {
+			'content-type': 'application/json',
+			'x-qwizz-client-id': clientId,
+		},
 		body: JSON.stringify(parsedDiff),
 	});
 

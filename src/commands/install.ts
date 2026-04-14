@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { getRepoRoot, isGitRepo } from '../git/repo.js'
+import { getOrCreateClientId } from '../git/clientIdentity.js'
 
 export type InstallOptions = {
 	/** Skip Husky; write only `.git/hooks/pre-commit`. */
@@ -88,6 +89,7 @@ export function install(options: InstallOptions = {}): void {
 	}
 
 	const repoRoot = getRepoRoot()
+	getOrCreateClientId()
 
 	if (!hasHuskyDir(repoRoot) && !options.native) {
 		const pkgJson = path.join(repoRoot, 'package.json')
