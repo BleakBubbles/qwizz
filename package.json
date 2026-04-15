@@ -2,6 +2,22 @@
 	"name": "qwizz",
 	"version": "0.1.0",
 	"description": "Check your understanding while you vibe code",
+	"license": "ISC",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/BleakBubbles/qwizz.git"
+	},
+	"homepage": "https://github.com/BleakBubbles/qwizz#readme",
+	"bugs": {
+		"url": "https://github.com/BleakBubbles/qwizz/issues"
+	},
+	"keywords": [
+		"git-hooks",
+		"quiz",
+		"learning",
+		"cli",
+		"commit"
+	],
 	"type": "module",
 	"bin": {
 		"qwizz": "./dist/cli.js"
@@ -26,7 +42,7 @@
 		"@hono/node-server": "^1.13.0",
 		"hono": "^4.0.0",
 		"open": "^10.0.0",
-		"qwizz-shared": "file:../qwizz-shared",
+		"qwizz-shared": "^0.1.0",
 		"react": "^19.0.0",
 		"react-dom": "^19.0.0"
 	},
