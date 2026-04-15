@@ -33,6 +33,19 @@ function SiteLogo() {
 	return <img className="site-logo" src="/logo.svg" alt="" width={40} height={40} aria-hidden={true} />;
 }
 
+function LoadingMessage({ text }: { text: string }) {
+	return (
+		<p className="loading">
+			<span>{text}</span>
+			<span className="loading-dots" aria-hidden="true">
+				<span>.</span>
+				<span>.</span>
+				<span>.</span>
+			</span>
+		</p>
+	);
+}
+
 function AppFrame({ children, showHeader = true }: { children: React.ReactNode; showHeader?: boolean }) {
 	return (
 		<>
@@ -136,7 +149,7 @@ export default function App() {
 	if (!session) {
 		return (
 			<AppFrame showHeader={false}>
-				<p className="loading">loading…</p>
+				<LoadingMessage text="loading" />
 			</AppFrame>
 		);
 	}
@@ -144,7 +157,7 @@ export default function App() {
 	if (!questions) {
 		return (
 			<AppFrame showHeader={false}>
-				<p className="loading">Generating quiz…</p>
+				<LoadingMessage text="Generating quiz" />
 			</AppFrame>
 		);
 	}

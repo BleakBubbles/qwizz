@@ -12,6 +12,8 @@ function sha256(text: string): string {
 	return crypto.createHash('sha256').update(text).digest('hex');
 }
 
+const API_BASE_URL = 'https://qwizz-api.macks0554.workers.dev';
+
 export async function gate(): Promise<void> {
 	if (!hasStagedChanges()) {
 		process.exit(0);
@@ -29,7 +31,7 @@ export async function gate(): Promise<void> {
 	};
 	const parsedDiff = parseUnifiedDiffToParsedInput(diff);
 	const clientId = getOrCreateClientId();
-	const apiBaseUrl = process.env.QWIZZ_API_BASE_URL ?? 'https://qwizz-api.macks0554.workers.dev';
+	const apiBaseUrl = API_BASE_URL;
 
 	let settled = false;
 
