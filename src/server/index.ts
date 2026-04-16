@@ -4,8 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
-import type { PublicQuizQuestion } from '../quiz/generate.js';
-import { QuizResponseSchema, type ParsedDiffInput, type QuizOptionId } from 'qwizz-shared';
+import { QuizResponseSchema, type ParsedDiffInput, type QuizOptionId, type QuizOption } from 'qwizz-shared';
 
 export type SubmitPayload = {
 	diffHash: string;
@@ -27,6 +26,12 @@ type StartQuizServerOptions = {
 	parsedDiff: ParsedDiffInput;
 	clientId: string;
 	onPass: (diffHash: string) => void;
+};
+
+type PublicQuizQuestion = {
+	id: string;
+	question: string;
+	options: QuizOption[];
 };
 
 type PrivateQuizQuestion = PublicQuizQuestion & {
@@ -56,11 +61,7 @@ export async function startQuizServer(options: StartQuizServerOptions): Promise<
 
 	app.get('/quiz', async (c) => {
 		if (!generatingPromise) {
-			generatingPromise = fetchAndNormalizeQuiz(
-				options.apiBaseUrl,
-				options.parsedDiff,
-				options.clientId,
-			);
+			generatingPromise = fetchAndNormalizeQuiz(options.apiBaseUrl, options.parsedDiff, options.clientId);
 		}
 		const nextGenerated = await generatingPromise;
 		generated = nextGenerated;
@@ -75,11 +76,7 @@ export async function startQuizServer(options: StartQuizServerOptions): Promise<
 		}
 
 		if (!generated) {
-			generated = await fetchAndNormalizeQuiz(
-				options.apiBaseUrl,
-				options.parsedDiff,
-				options.clientId,
-			);
+			generated = await fetchAndNormalizeQuiz(options.apiBaseUrl, options.parsedDiff, options.clientId);
 		}
 
 		const result = gradeAnswers(generated.privateQuestions, body.answers);
