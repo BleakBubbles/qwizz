@@ -1,157 +1,84 @@
-import { spawnSync } from 'node:child_process'
-import fs from 'node:fs'
-import path from 'node:path'
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 
-import { getRepoRoot, isGitRepo } from '../git/repo.js'
-import { getOrCreateClientId } from '../git/clientIdentity.js'
+import { getGitDir, getRepoRoot, isGitRepo } from '../git/repo.js';
+import { getOrCreateClientId } from '../git/clientIdentity.js';
+import { MARKER_BEGIN, MARKER_END, huskyCorePath, huskyHookPath, nativeHookPath, readText } from '../hooks.js';
 
-export type InstallOptions = {
-	/** Skip Husky; write only `.git/hooks/pre-commit`. */
-	native?: boolean
-}
+const SHEBANG = '#!/usr/bin/env sh\n';
+const QWIZZ_BLOCK = `${MARKER_BEGIN}\nnpx qwizz gate\n${MARKER_END}\n`;
 
-const MARKER_BEGIN = '# qwizz begin'
-const MARKER_END = '# qwizz end'
-
-const QWIZZ_BLOCK = `${MARKER_BEGIN}
-npx qwizz gate
-${MARKER_END}
-`
-
-/** Husky 9+ loads this script before hook commands. */
-const HUSKY_SH_HEADER = `#!/usr/bin/env sh
-. "$(dirname "$0")/_/husky.sh"
-
-`
-
-function huskyPreCommitPath(repoRoot: string): string {
-	return path.join(repoRoot, '.husky', 'pre-commit')
-}
-
-function nativeHookPath(repoRoot: string): string {
-	return path.join(repoRoot, '.git', 'hooks', 'pre-commit')
-}
-
-function hasHuskyDir(repoRoot: string): boolean {
-	return fs.existsSync(path.join(repoRoot, '.husky'))
-}
-
-function huskyCorePresent(repoRoot: string): boolean {
-	return fs.existsSync(path.join(repoRoot, '.husky', '_', 'husky.sh'))
-}
-
-function readHookFile(filePath: string): string {
-	try {
-		return fs.readFileSync(filePath, 'utf8')
-	} catch {
-		return ''
+function requireRepoRoot(): string {
+	if (!isGitRepo()) {
+		console.error('Not a git repository (run from inside a repo).');
+		process.exit(1);
 	}
+	return getRepoRoot();
 }
 
 function stripQwizzBlock(content: string): string {
-	const start = content.indexOf(MARKER_BEGIN)
-	const end = content.indexOf(MARKER_END)
-	if (start === -1 || end === -1 || end < start) {
-		return content
+	const start = content.indexOf(MARKER_BEGIN);
+	const end = content.indexOf(MARKER_END);
+	if (start === -1 || end < start) {
+		return content;
 	}
-	const afterEnd = content.indexOf('\n', end)
-	const removeTo = afterEnd === -1 ? content.length : afterEnd + 1
-	return content.slice(0, start) + content.slice(removeTo)
+	const afterEnd = content.indexOf('\n', end);
+	return content.slice(0, start) + (afterEnd === -1 ? '' : content.slice(afterEnd + 1));
 }
 
-function ensureQwizzBlock(content: string): string {
-	const trimmed = stripQwizzBlock(content).replace(/\s+$/, '')
-	const block = QWIZZ_BLOCK.trimEnd() + '\n'
-	if (!trimmed) {
-		return block
-	}
-	return `${trimmed}\n\n${block}`
+function writeHook(filePath: string, content: string): void {
+	fs.mkdirSync(path.dirname(filePath), { recursive: true });
+	fs.writeFileSync(filePath, content, { mode: 0o755 });
 }
 
-function writeExecutable(filePath: string, content: string): void {
-	fs.mkdirSync(path.dirname(filePath), { recursive: true })
-	fs.writeFileSync(filePath, content, { mode: 0o755 })
-}
+export function install({ native = false }: { native?: boolean } = {}): void {
+	const repoRoot = requireRepoRoot();
+	getOrCreateClientId();
 
-function runHuskyInit(repoRoot: string): boolean {
-	const result = spawnSync('npx', ['--yes', 'husky', 'init'], {
-		cwd: repoRoot,
-		stdio: 'inherit',
-		shell: true,
-	})
-	return result.status === 0
-}
-
-export function install(options: InstallOptions = {}): void {
-	if (!isGitRepo()) {
-		console.error('Not a git repository (run from inside a repo).')
-		process.exit(1)
-	}
-
-	const repoRoot = getRepoRoot()
-	getOrCreateClientId()
-
-	if (!hasHuskyDir(repoRoot) && !options.native) {
-		const pkgJson = path.join(repoRoot, 'package.json')
-		if (fs.existsSync(pkgJson)) {
-			console.log('Setting up Husky so hooks live in the repo (one-time)…')
-			if (!runHuskyInit(repoRoot)) {
-				console.warn(
-					'Husky setup failed — using .git/hooks only. Fix npm/network and run npx qwizz install again.',
-				)
-			}
+	const huskyDir = path.join(repoRoot, '.husky');
+	if (!native && !fs.existsSync(huskyDir) && fs.existsSync(path.join(repoRoot, 'package.json'))) {
+		console.log('Setting up Husky so hooks live in the repo (one-time)…');
+		const result = spawnSync('npx', ['--yes', 'husky', 'init'], { cwd: repoRoot, stdio: 'inherit', shell: true });
+		if (result.status !== 0) {
+			console.warn('Husky setup failed — using .git/hooks only. Fix npm/network and run npx qwizz install again.');
 		}
 	}
 
-	if (hasHuskyDir(repoRoot)) {
-		const hookPath = huskyPreCommitPath(repoRoot)
-		let existing = readHookFile(hookPath)
-		if (!existing.trim()) {
-			existing = huskyCorePresent(repoRoot) ? HUSKY_SH_HEADER : '#!/usr/bin/env sh\n\n'
-		}
-		const next = ensureQwizzBlock(existing)
-		writeExecutable(hookPath, next)
-		console.log(`Updated ${path.relative(repoRoot, hookPath)}`)
-		return
+	const useHusky = fs.existsSync(huskyDir);
+	const hookPath = useHusky ? huskyHookPath(repoRoot) : nativeHookPath(getGitDir());
+
+	let existing = stripQwizzBlock(readText(hookPath)).trimEnd();
+	if (!existing) {
+		// Husky 9+ loads husky.sh before hook commands.
+		existing = useHusky && fs.existsSync(huskyCorePath(repoRoot)) ? `${SHEBANG}. "$(dirname "$0")/_/husky.sh"` : SHEBANG;
+	} else if (!useHusky && !existing.startsWith('#!')) {
+		existing = SHEBANG + existing;
 	}
 
-	const hookPath = nativeHookPath(repoRoot)
-	const existing = readHookFile(hookPath)
-	const shebang = '#!/usr/bin/env sh\n'
-	const body = existing.startsWith('#!/') ? existing : shebang + existing
-	const next = ensureQwizzBlock(body)
-	writeExecutable(hookPath, next)
-	console.log(`Updated ${path.relative(repoRoot, hookPath)}`)
+	writeHook(hookPath, `${existing.trimEnd()}\n\n${QWIZZ_BLOCK}`);
+	console.log(`Updated ${path.relative(repoRoot, hookPath)}`);
 }
 
 export function uninstall(): void {
-	if (!isGitRepo()) {
-		console.error('Not a git repository (run from inside a repo).')
-		process.exit(1)
-	}
+	const repoRoot = requireRepoRoot();
 
-	const repoRoot = getRepoRoot()
-	const paths = [
-		huskyPreCommitPath(repoRoot),
-		nativeHookPath(repoRoot),
-	]
+	let removed = false;
+	for (const hookPath of [huskyHookPath(repoRoot), nativeHookPath(getGitDir())]) {
+		const raw = readText(hookPath);
+		if (!raw.includes(MARKER_BEGIN)) continue;
 
-	let removed = false
-	for (const hookPath of paths) {
-		if (!fs.existsSync(hookPath)) continue
-		const raw = readHookFile(hookPath)
-		if (!raw.includes(MARKER_BEGIN)) continue
-		const next = stripQwizzBlock(raw).replace(/\n{3,}/g, '\n\n').trimEnd()
+		const next = stripQwizzBlock(raw).replace(/\n{3,}/g, '\n\n').trimEnd();
 		if (next) {
-			writeExecutable(hookPath, next + '\n')
+			writeHook(hookPath, next + '\n');
 		} else {
-			fs.unlinkSync(hookPath)
+			fs.unlinkSync(hookPath);
 		}
-		console.log(`Removed qwizz from ${path.relative(repoRoot, hookPath)}`)
-		removed = true
+		console.log(`Removed qwizz from ${path.relative(repoRoot, hookPath)}`);
+		removed = true;
 	}
 
 	if (!removed) {
-		console.log('No qwizz hook block found.')
+		console.log('No qwizz hook block found.');
 	}
 }
